@@ -1,0 +1,13 @@
+{
+  "name": "dESPatch",
+  "keywords": "wifi, wi-fi", "update",
+  "description": "ESP32 update over HTTP",
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/admarschoonen/dESPatch"
+  },
+  "frameworks": "arduino",
+  "platforms": ["espressif32"],
+  "version": "0.0.1"
+}

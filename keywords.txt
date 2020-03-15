@@ -1,0 +1,24 @@
+#######################################
+# Syntax Coloring Map For dESPatch
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+dESPatch KEYWORD1
+
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+getMac KEYWORD2
+getUpdateInterval KEYWORD2
+update KEYWORD2
+configure KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+#	LITERAL1
