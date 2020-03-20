@@ -58,5 +58,5 @@ For more advanced usage such as automatic checking in the background or deployin
 Alternatively, instead of manually polling the server for updates dESPatch can automatically check for updates in the background and optionally also automatically install them. See the examples directory for more information.
 
 ## Custom firmware for specific devices
-The 4th argument of `dESPatch.configure()` indicates if the ESP should append its MAC address to the JSON filename. If it is set to true, it will check for `path/to/esp32_update.ino.esp32_XXXXXXXXXXXX.json` first, where `XXXXXXXXXXXX` is the MAC address in HEX format. If this file is not found, it will check for `path/to/esp32_update.ino.esp32_XXXXXXXXXXXX.json`. This way, you can deploy specific firmware such as beta-versions to select devices first before making it generally available.
+The 4th argument of `dESPatch.configure()` indicates if the ESP should append its MAC address to the JSON filename. If it is set to true, it will check for `path/to/esp32_update.ino.esp32_XXXXXXXXXXXX.json` first, where `XXXXXXXXXXXX` is the MAC address in HEX format. If this file is not found, it will check for `path/to/esp32_update.ino.esp32.json`. This way, you can deploy specific firmware such as beta-versions to select devices first before making it generally available.
 
