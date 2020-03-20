@@ -2,14 +2,14 @@
 Library to perform firmware updates for ESP32 modules via a webserver
 
 ## Usage
-#### Includes
+### Includes
 In the top of your sketch add
 ```cpp
 #include <dESPatch.h>
 DESPatch dESPatch;
 ```
 
-#### Setup
+### Setup
 In your setup function add
 ```cpp
 dESPatch.configure("example.com", 80, "path/to/esp32_update.ino.esp32.json", true, 0, false, NULL, NULL);
@@ -17,17 +17,17 @@ dESPatch.configure("example.com", 80, "path/to/esp32_update.ino.esp32.json", tru
 Replace `example.com` with the hostname where you have stored the firmware and change `80` in case the server runs ons a different port.
 Replace `path/to/esp32_update.ino.esp32.json` with the JSON file that contains the description of the firmware.
 
-#### Main loop
+### Main loop
 In your main loop, repeatedly call
 ```cpp
 dESPatch.checkForUpdate(true);
 ```
 to check for new firmware and immediately install the firmware if a new version is available.
 
-#### Export binary
+### Export binary
 In Arduino export the binary with `Sketch` -> `Export compiled binary`. Copy the binary to the server from where the ESP should download it.
 
-#### Create JSON file
+### Create JSON file
 Create a JSON text file with the following structure and place it in on the server in the same folder as where you stored the binary:
 ```json
 {
