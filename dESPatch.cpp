@@ -548,17 +548,20 @@ int DESPatch::configure(String hostname, int port, String filename,
   _callback = callback;
   _userdata = userdata;
 
-  // Set _lastTimeChecked to now - _interval to ensure update() will 
-  // immediately check for updates the first time it is called
-  _lastTimeChecked = millis() - _interval * 1000;
-
   if (_interval > 0) {
+    // Set _lastTimeChecked to now - _interval to ensure update() will 
+    // immediately check for updates the first time it is called
+    _lastTimeChecked = millis() - _interval * 1000;
+
     // Create the background task that will check and install updates
     priority = DESPATCH_TASK_PRIORITY;
     //priority = uxTaskPriorityGet(NULL);
     dESPatchTaskArg.autoInstall = _autoInstall;
     dESPatchTaskArg.dESPatch = this;
     xTaskCreate(dESPatchTask, "dESPatchTask", DESPATCH_STACK_SIZE, &dESPatchTaskArg, priority, NULL);
+  } else {
+    // background task is disabled
+    _lastTimeChecked = 0;
   }
    
   return 0;
