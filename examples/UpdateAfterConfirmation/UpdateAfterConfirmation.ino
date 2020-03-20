@@ -29,31 +29,38 @@ void setup() {
   //keep LED on
   digitalWrite(LED_BUILTIN, LED_ON_VALUE_DEFAULT);
 
-  updateResult = dESPatch.configure("example.com", 80, "path/to/esp32_update.ino.esp32.json", true, 10);
+  updateResult = dESPatch.configure("example.com", 80, "path/to/esp32_update.ino.esp32.json", true, 10, false, NULL, NULL);
   Serial.print("dESPatch.configure() returned with code ");
   Serial.println(updateResult);
 }
 
 void loop(void) {
   static unsigned long t_prev = 0;
+  static unsigned long t_prev2 = 0;
   static bool ledOn = false;
   unsigned long t_now = millis();
   const int buttonPin = 0;
-  
-  if (t_now - t_prev >= 2000) {
+  String localVersion = "";
+  String remoteVersion = "";
+
+  if (t_now - t_prev >= 500) {
     t_prev = t_now;
     ledOn ^= true;
     digitalWrite(LED_BUILTIN, ledOn);
   }
-  if (dESPatch.checkForUpdate(false) > 0) {
-    Serial.print(F("Update available\nLocal version:  "));
-    Serial.println(*dESPatch.getLocalVersion());
-    Serial.print(F("Remote version: "));
-    Serial.println(*dESPatch.getRemoteVersion());
-    Serial.println("Press button to install the update");
-    if (digitalRead(buttonPin) == LOW) {
-      dESPatch.installUpdate();
+  if (t_now - t_prev2 >= 1000) {
+    if (dESPatch.updateAvailable) {
+      Serial.println(F("Update available"));
+      Serial.print(F("Local version:  "));
+      Serial.println(*dESPatch.getLocalVersion(&localVersion));
+      Serial.print(F("Remote version: "));
+      Serial.println(*dESPatch.getRemoteVersion(&remoteVersion));
+      Serial.println("Press button to install the update");
+      if (digitalRead(buttonPin) == LOW) {
+        dESPatch.installUpdate();
+      }
     }
+    t_prev2 = t_now;
   }
+  delay(10); // Do not remove delay, else dESPatchTask will not be able to run!
 }
-

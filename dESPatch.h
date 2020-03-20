@@ -28,35 +28,71 @@ extern "C" {
 #define ESP_getChipId()   ((uint32_t)ESP.getEfuseMac())
 #endif
 
+typedef enum dESPatchEvent {
+  DESPatchEventInternalError = -ENOTRECOVERABLE,
+  DESPatchEventInstallationError = -EIO,
+  DESPatchEventConnectionError = -ECONNABORTED,
+  DESPatchEventAlreadyUpToDate = 0,
+  DESPatchEventUpdateAvailable = 1,
+  DESPatchEventUpdateInstalledSuccessfully = 2
+} DESPatchEvent;
+
+typedef enum dESPatchRunState {
+  DESPatchRunStatePaused = 0,
+  DESPatchRunStateIdle,
+  DESPatchRunStateChecking,
+  DESPatchRunStateInstalling,
+  DESPatchRunStateError
+} DESPatchRunState;
+
+typedef void (*DESPatchCallback)(DESPatchEvent event, void * userdata);
+
 class DESPatch
 {
   public:
-    void          dESPatch();
-
-    int           configure(String hostname, int port, String filename, bool appendMac, unsigned int interval);
-    int           checkForUpdate(bool installUpdate);
-    int           installUpdate(void);
-    int           getInterval(void);
-    String *      getLocalVersion(void);
-    String *      getRemoteVersion(void);
-    String *      getUrl(void);
+    /* functions */
+    void              dESPatch();
+    int               configure(String hostname, int port, String filename, 
+                        bool appendMac, unsigned long interval, 
+                        bool autoInstall, DESPatchCallback callback, 
+                        void * userdata);
+    int               installUpdate(void);
+    unsigned long     getInterval(void);
+    String *          getLocalVersion(String * s);
+    String *          getRemoteVersion(String * s);
+    String *          getUrl(String * s);
+    bool              updateAvailable;
+    void              setLogLevel(uint8_t logLevel);
+    void              setRunState(DESPatchRunState state);
+    DESPatchRunState  getRunState(void);
+    int               checkForUpdate(bool autoInstall);
 
   private:
-    String        getHeaderValue(String header, String headerName);
-    int           getFile(String filename);
-    String        getMac(void);
-    String        _hostname;
-    int           _port;
-    unsigned int  _interval;
-    String        _localVersion;
-    String        _remoteVersion;
-    String        _jsonName;
-    String        _jsonNameWithMac;
-    String        _binName;
-    String        _binNameFullPath;
-    String        _url;
-    bool          _appendMac;
-    unsigned long _lastTimeChecked;
+    /* functions */
+    String            getHeaderValue(String header, String headerName);
+    int               getFile(String filename);
+    String            getMac(void);
+    int               installUpdateNoMutex(void);
+
+    /* variables */
+    SemaphoreHandle_t _busyMutex;
+    String            _hostname;
+    int               _port;
+    unsigned long     _interval;
+    String            _localVersion;
+    String            _remoteVersion;
+    String            _jsonName;
+    String            _jsonNameWithMac;
+    String            _binName;
+    String            _binNameFullPath;
+    String            _url;
+    bool              _appendMac;
+    bool              _autoInstall;
+    DESPatchCallback  _callback;
+    void *            _userdata;
+    unsigned long     _lastTimeChecked;
+    uint8_t           _logLevel;
+    DESPatchRunState  _runState;
 };
 
 #endif

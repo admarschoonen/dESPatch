@@ -10,14 +10,83 @@
 #include <Update.h>
 #include <Preferences.h>
 
+#define DESPATCH_TASK_PRIORITY tskIDLE_PRIORITY /* higher means higher priority; 0 is lowest (idle task) */
+#define DESPATCH_STACK_SIZE 8192 /* stack size in bytes */
+#define DESPATCH_MINIMUM_DELAY 1000 /* minimum delay between checking for updates (ms) */
+
+typedef struct dESPatchTaskArg {
+  bool autoInstall;
+  DESPatch * dESPatch;
+} DESPatchTaskArg;
+
+//#define MUTEX_DEBUG
+
+int myMutexTakeFunc(const char * f, SemaphoreHandle_t x, TickType_t timeout)
+{
+  int retval;
+
+#ifdef MUTEX_DEBUG
+  Serial.print(millis());
+  Serial.print(" ");
+  Serial.print(f);
+  Serial.println("(): waiting for mutex");
+#endif
+  retval = xSemaphoreTake(x, timeout);
+#ifdef MUTEX_DEBUG
+  Serial.print(millis());
+  Serial.print(" ");
+  Serial.print(f);
+  if (retval == pdPASS) {
+    Serial.println("(): got mutex");
+  } else {
+    Serial.println("(): failed to get mutex");
+  }
+#endif
+  
+  return retval;
+}
+
+int myMutexGiveFunc(const char * f, SemaphoreHandle_t x)
+{
+  int retval;
+
+#ifdef MUTEX_DEBUG
+  Serial.print(millis());
+  Serial.print(" ");
+  Serial.print(f);
+  Serial.println("(): releasing mutex");
+#endif
+  retval = xSemaphoreGive(x);
+#ifdef MUTEX_DEBUG
+  Serial.print(millis());
+  Serial.print(" ");
+  Serial.print(f);
+  if (retval == pdPASS) {
+    Serial.println("(): mutex released");
+  } else {
+    Serial.println("(): failed to release mutex");
+  }
+#endif
+
+  return retval;
+}
+
+#define myMutexTake(x, timeout) myMutexTakeFunc(__func__, x, timeout)
+
+#define myMutexGive(x) myMutexGiveFunc(__func__, x)
+
+#define myMutexCreateMutex() xSemaphoreCreateMutex()
+
 static Preferences dESPatchPrefs;
 static WiFiClient client;
 
-String DESPatch::getHeaderValue(String header, String headerName) {
+String DESPatch::getHeaderValue(String header, String headerName)
+{
   return header.substring(strlen(headerName.c_str()));
 }
 
-String DESPatch::getMac(void) {
+String DESPatch::getMac(void)
+{
   String mac;
   uint64_t tmp;
   uint64_t tmp64;
@@ -41,7 +110,8 @@ String DESPatch::getMac(void) {
   return mac;
 }
 
-int DESPatch::getFile(String filename) {
+int DESPatch::getFile(String filename)
+{
   // return codes:
   //  0: installed firmware is same as on server
   //  1: new firmware available
@@ -64,6 +134,8 @@ int DESPatch::getFile(String filename) {
     // Connection Succeed.
     // Fecthing the bin
 
+    Serial.print("getFile: ");
+    Serial.println(filename);
     pos = filename.lastIndexOf('.');
     if ((pos > 0) && (filename.substring(pos).compareTo(".json") == 0)) {
       isJson = true;
@@ -127,7 +199,8 @@ int DESPatch::getFile(String filename) {
       if (line.startsWith("HTTP/1.1 ")) {
         httpResponseCode = line.substring(9).toInt();
         if (httpResponseCode != 200) {
-          Serial.println("Got a non 200 status code from server: " + String(httpResponseCode) + ". Exiting OTA Update.");
+          Serial.println("Got a non 200 status code from server: " + 
+            String(httpResponseCode) + ". Exiting OTA Update.");
           retval = -1;
           break;
         }
@@ -136,16 +209,17 @@ int DESPatch::getFile(String filename) {
       // extract headers here
       // Start with content length
       if (line.startsWith("Content-Length: ")) {
-        contentLength = atol((getHeaderValue(line, "Content-Length: ")).c_str());
+        contentLength = atol((getHeaderValue(line, 
+          "Content-Length: ")).c_str());
       }
 
       // Next, the content type
       if (line.startsWith("Content-Type: ")) {
         String contentType = getHeaderValue(line, "Content-Type: ");
-        //if ((isJson) && (contentType == "text/plain; charset=UTF-8")) {
         if ((isJson) && (contentType == "application/json")) {
           isValidContentType = true;
-        } else if ((isJson == false) && (contentType == "application/octet-stream")) {
+        } else if ((isJson == false) && (contentType == 
+            "application/octet-stream")) {
           isValidContentType = true;
         } else {
           Serial.println("Got invalid content type: " + contentType);
@@ -156,7 +230,8 @@ int DESPatch::getFile(String filename) {
     // Connect to S3 failed
     // May be try?
     // Probably a choppy network?
-    Serial.println("Connection to " + String(_hostname) + " failed. Please check your setup");
+    Serial.println("Connection to " + String(_hostname) + 
+      " failed. Please check your setup");
     retval = -1;
     // retry??
     // execOTA();
@@ -175,7 +250,7 @@ int DESPatch::getFile(String filename) {
         line = client.readString();
         err = deserializeJson(_jsonDoc, line);
         if (err) {
-          Serial.print(F("deserialization failed: "));
+          Serial.print(F("JSON deserialization failed: "));
           Serial.println(err.c_str());
           retval = -1;
         } else {
@@ -202,7 +277,10 @@ int DESPatch::getFile(String filename) {
           }
 
           if ((_remoteVersion != "") && (_localVersion != _remoteVersion)) {
+            updateAvailable = true;
             retval = 1;
+          } else {
+            updateAvailable = false;
           }
         }
       }
@@ -212,7 +290,8 @@ int DESPatch::getFile(String filename) {
   
       // If yes, begin
       if (canBegin) {
-        Serial.println("Begin OTA. This may take 2 - 5 mins to complete. Things might be quiet for a while.. Patience!");
+        Serial.println("Begin OTA. This may take 2 - 5 mins to complete. "
+          "Things might be quiet for a while.. Patience!");
         // No activity would appear on the Serial monitor
         // So be patient. This may take 2 - 5mins to complete
         size_t written = Update.writeStream(client);
@@ -220,7 +299,8 @@ int DESPatch::getFile(String filename) {
         if (written == contentLength) {
           Serial.println("Written : " + String(written) + " successfully");
         } else {
-          Serial.println("Written only : " + String(written) + "/" + String(contentLength) + ". Retry?" );
+          Serial.println("Written only : " + String(written) + "/" + 
+            String(contentLength) + ". Retry?" );
           // retry??
           // execOTA();
         }
@@ -238,7 +318,8 @@ int DESPatch::getFile(String filename) {
             retval = -2;
           }
         } else {
-          Serial.println("Error Occurred. Error #: " + String(Update.getError()));
+          Serial.println("Error Occurred. Error #: " + 
+            String(Update.getError()));
           retval = -2;
         }
       } else {
@@ -256,16 +337,32 @@ int DESPatch::getFile(String filename) {
   return retval;
 }
 
-int DESPatch::installUpdate(void) {
+int DESPatch::installUpdateNoMutex(void)
+{
   return getFile(_binNameFullPath);
 }
 
-int DESPatch::checkForUpdate(bool _installUpdate) {
+int DESPatch::installUpdate(void)
+{
+  int retval = -ENOTRECOVERABLE;
+
+  if (myMutexTake(_busyMutex, portMAX_DELAY) == pdPASS) {
+    retval = installUpdateNoMutex();
+    myMutexGive(_busyMutex);
+  }
+
+  return retval;
+}
+
+int DESPatch::checkForUpdate(bool autoInstall)
+{
+  unsigned long now;
   int retval = 0;
   int pos = -1;
-  int now = millis();
 
-  if (now - _lastTimeChecked >= _interval * 1000) {
+  if (myMutexTake(_busyMutex, portMAX_DELAY) == pdPASS) {
+    now = millis();
+    _runState = DESPatchRunStateChecking;
     if (_appendMac) {
       retval = getFile(_jsonNameWithMac);
       if (retval >= 0) {
@@ -289,39 +386,150 @@ int DESPatch::checkForUpdate(bool _installUpdate) {
         _binNameFullPath = "";
       }
     }
-    if ((retval == 1) && _installUpdate) {
-      Serial.println(String(__func__) + "(): need to do SW update with binname: " + _binNameFullPath);
-      retval = installUpdate();
+    if ((retval == 1) && autoInstall) {
+      _runState = DESPatchRunStateInstalling;
+      Serial.println(String(__func__) + "(): need to do SW update with binname: "
+        + _binNameFullPath);
+      retval = installUpdateNoMutex();
     }
+
     _lastTimeChecked = now;
+    _runState = DESPatchRunStateIdle;
+    myMutexGive(_busyMutex);
+  } else {
+    retval = -ENOTRECOVERABLE;
   }
   return retval;
 }
 
-int DESPatch::getInterval(void) {
-  return _interval;
+unsigned long DESPatch::getInterval(void)
+{
+  unsigned long interval = 0;
+
+  if (myMutexTake(_busyMutex, portMAX_DELAY) == pdPASS) {
+    interval = _interval;
+    myMutexGive(_busyMutex);
+  }
+
+  return interval;
 }
 
-String * DESPatch::getUrl(void) {
-  return &_url;
+String * DESPatch::getUrl(String * s)
+{
+  if (myMutexTake(_busyMutex, portMAX_DELAY) == pdPASS) {
+    *s = _url;
+    myMutexGive(_busyMutex);
+  } else {
+    *s = "";
+  }
+
+  return s;
 }
 
-String * DESPatch::getLocalVersion(void) {
-  return &_localVersion;
+String * DESPatch::getLocalVersion(String * s)
+{
+  if (myMutexTake(_busyMutex, portMAX_DELAY) == pdPASS) {
+    *s = _localVersion;
+    myMutexGive(_busyMutex);
+  } else {
+    *s = "";
+  }
+
+  return s;
 }
 
-String * DESPatch::getRemoteVersion(void) {
-  return &_remoteVersion;
+String * DESPatch::getRemoteVersion(String * s)
+{
+  if (myMutexTake(_busyMutex, portMAX_DELAY) == pdPASS) {
+    *s = _remoteVersion;
+    myMutexGive(_busyMutex);
+  } else {
+    *s = "";
+  }
+
+  return s;
 }
 
-int DESPatch::configure(String hostname, int port, String filename, bool appendMac, unsigned int interval) {
+void DESPatch::setLogLevel(uint8_t logLevel)
+{
+  if (myMutexTake(_busyMutex, portMAX_DELAY) == pdPASS) {
+    _logLevel = logLevel;
+    myMutexGive(_busyMutex);
+  }
+}
+
+void dESPatchTask(void * DESPatchTaskArgP)
+{
+  unsigned long start, stop, interval, delay;
+  DESPatch * dESPatchP = ((DESPatchTaskArg *) DESPatchTaskArgP)->dESPatch;
+  bool autoInstall = ((DESPatchTaskArg *) DESPatchTaskArgP)->autoInstall;
+
+  interval = dESPatchP->getInterval() * 1000;
+  while (1) {
+    start = millis();
+
+    if (interval > 0) {
+      dESPatchP->checkForUpdate(autoInstall);
+    }
+
+    interval = dESPatchP->getInterval() * 1000;
+    stop = millis();
+    if ((interval > (stop - start)) && (interval - (stop - start) > 
+        DESPATCH_MINIMUM_DELAY)) {
+      delay = interval - (stop - start);
+    } else {
+      delay = DESPATCH_MINIMUM_DELAY;
+    }
+
+    vTaskDelay(delay / portTICK_PERIOD_MS);
+  }
+}
+
+void DESPatch::setRunState(DESPatchRunState state)
+{
+  if (myMutexTake(_busyMutex, portMAX_DELAY) == pdPASS) {
+    if ((state > DESPatchRunStateIdle) && (_runState == DESPatchRunStatePaused)) {
+      _runState = DESPatchRunStateIdle;
+    } else {
+      _runState = DESPatchRunStatePaused;
+    }
+
+    myMutexGive(_busyMutex);
+  }
+}
+
+DESPatchRunState DESPatch::getRunState(void)
+{
+  // No mutex here since we want to know exactly in what state the task is
+  return _runState;
+}
+
+int DESPatch::configure(String hostname, int port, String filename, 
+    bool appendMac, unsigned long interval, bool autoInstall, 
+    DESPatchCallback callback, void * userdata)
+{
+  DESPatchTaskArg dESPatchTaskArg;
   int pos;
+  int priority;
+
+  if ((interval > 0) && (interval * 1000 < DESPATCH_MINIMUM_DELAY)) {
+    Serial.print(F("Error! interval must be equal to or larger than "));
+    Serial.println((DESPATCH_MINIMUM_DELAY + 500) / 1000);
+    return -EDOM;
+  }
+  _busyMutex = myMutexCreateMutex();
+  if (_busyMutex == NULL) {
+    Serial.println("configure(): failed to create mutex!");
+    return DESPatchEventInternalError;
+  }
 
   dESPatchPrefs.begin("dESPatch", true);
   _localVersion = dESPatchPrefs.getString("version", "");
   dESPatchPrefs.end();
   _remoteVersion = "";
+  updateAvailable = false;
   _url = "";
+  _logLevel = 0;
 
   _hostname = hostname;
   _port = port;
@@ -331,15 +539,28 @@ int DESPatch::configure(String hostname, int port, String filename, bool appendM
     return -EINVAL;
   }
   _jsonName = "/" + filename;
-  _jsonNameWithMac = "/" + filename.substring(0, pos) + "_" + getMac() + filename.substring(pos);
+  _jsonNameWithMac = "/" + filename.substring(0, pos) + "_" + getMac() + 
+    filename.substring(pos);
 
   _appendMac = appendMac;
   _interval = interval;
+  _autoInstall = autoInstall;
+  _callback = callback;
+  _userdata = userdata;
 
   // Set _lastTimeChecked to now - _interval to ensure update() will 
   // immediately check for updates the first time it is called
   _lastTimeChecked = millis() - _interval * 1000;
 
+  if (_interval > 0) {
+    // Create the background task that will check and install updates
+    priority = DESPATCH_TASK_PRIORITY;
+    //priority = uxTaskPriorityGet(NULL);
+    dESPatchTaskArg.autoInstall = _autoInstall;
+    dESPatchTaskArg.dESPatch = this;
+    xTaskCreate(dESPatchTask, "dESPatchTask", DESPATCH_STACK_SIZE, &dESPatchTaskArg, priority, NULL);
+  }
+   
   return 0;
 }
 
