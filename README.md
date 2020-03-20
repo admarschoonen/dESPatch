@@ -2,11 +2,13 @@
 Library to perform firmware updates for ESP32 modules via a webserver
 
 ## Usage
-To use this library, you'll need to do 5 things:
+To use this library, you'll need to do 6 things:
 1. Add this library to your sketch and create a DESPatch object.
 2. Configure the library so that it knows where to find new versions of your code
 3. Change the main loop to check and install updates
-4. Export the binary
+4. Export the binary and upload it to the server
+5. Create a JSON file that contains the version number and upload it to the server
+6. Upload the sketch to the ESP
 ### Add library and create DESPatch object
 In the top of your sketch add
 ```cpp
