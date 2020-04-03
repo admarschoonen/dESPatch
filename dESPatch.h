@@ -52,15 +52,14 @@ class DESPatch
   public:
     /* functions */
     void              dESPatch();
-    int               configure(String hostname, int port, String filename, 
-                        bool appendMac, unsigned long interval, 
-                        bool autoInstall, DESPatchCallback callback, 
-                        void * userdata);
+    int               configure(String url, bool appendMac, 
+                        unsigned long interval, bool autoInstall, 
+                        DESPatchCallback callback, void * userdata);
     int               installUpdate(void);
     unsigned long     getInterval(void);
     String *          getLocalVersion(String * s);
     String *          getRemoteVersion(String * s);
-    String *          getUrl(String * s);
+    String *          getReleaseNotes(String * s);
     bool              updateAvailable;
     void              setLogLevel(uint8_t logLevel);
     void              setRunState(DESPatchRunState state);
@@ -76,16 +75,14 @@ class DESPatch
 
     /* variables */
     SemaphoreHandle_t _busyMutex;
-    String            _hostname;
-    int               _port;
     unsigned long     _interval;
     String            _localVersion;
     String            _remoteVersion;
-    String            _jsonName;
-    String            _jsonNameWithMac;
+    String            _jsonUrl;
+    String            _jsonUrlWithMac;
     String            _binName;
     String            _binNameFullPath;
-    String            _url;
+    String            _releaseNotes;
     bool              _appendMac;
     bool              _autoInstall;
     DESPatchCallback  _callback;

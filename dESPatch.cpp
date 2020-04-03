@@ -9,6 +9,7 @@
 #include "dESPatch.h"
 #include <Update.h>
 #include <Preferences.h>
+#include <HTTPClient.h>
 
 #define DESPATCH_TASK_PRIORITY tskIDLE_PRIORITY /* higher means higher priority; 0 is lowest (idle task) */
 #define DESPATCH_STACK_SIZE 8192 /* stack size in bytes */
@@ -122,132 +123,32 @@ int DESPatch::getFile(String filename)
 
   int retval = 0;
   int pos = -1;
-  int httpResponseCode = 0;
   long contentLength = 0;
-  bool isValidContentType = false;
   bool isJson = false;
   String fname;
   String line;
+  HTTPClient http;
+  int ret;
 
-  // Connect to server
-  if (client.connect(_hostname.c_str(), _port)) {
-    // Connection Succeed.
-    // Fecthing the bin
-
-    Serial.print("getFile: ");
-    Serial.println(filename);
-    pos = filename.lastIndexOf('.');
-    if ((pos > 0) && (filename.substring(pos).compareTo(".json") == 0)) {
-      isJson = true;
-    }
-    // Get the contents of the bin file
-    client.print(String("GET ") + filename + " HTTP/1.1\r\n" +
-                 "Host: " + _hostname + "\r\n" +
-                 "Cache-Control: no-cache\r\n" +
-                 "Connection: close\r\n\r\n");
-
-    // Check what is being sent
-    //    Serial.print(String("GET ") + bin + " HTTP/1.1\r\n" +
-    //                 "Host: " + host + "\r\n" +
-    //                 "Cache-Control: no-cache\r\n" +
-    //                 "Connection: close\r\n\r\n");
-
-    unsigned long timeout = millis();
-    while (client.available() == 0) {
-      if (millis() - timeout > 5000) {
-        Serial.println("Client Timeout !");
-        client.stop();
-        return -1;
-      }
-    }
-    // Once the response is available,
-    // check stuff
-
-    /*
-       Response Structure
-        HTTP/1.1 200 OK
-        x-amz-id-2: NVKxnU1aIQMmpGKhSwpCBh8y2JPbak18QLIfE+OiUDOos+7UftZKjtCFqrwsGOZRN5Zee0jpTd0=
-        x-amz-request-id: 2D56B47560B764EC
-        Date: Wed, 14 Jun 2017 03:33:59 GMT
-        Last-Modified: Fri, 02 Jun 2017 14:50:11 GMT
-        ETag: "d2afebbaaebc38cd669ce36727152af9"
-        Accept-Ranges: bytes
-        Content-Type: application/octet-stream
-        Content-Length: 357280
-        Server: AmazonS3
-                                   
-        {{BIN FILE CONTENTS}}
-    */
-    while (client.available()) {
-      // read line till /n
-      line = client.readStringUntil('\n');
-      // remove space, to check if the line is end of headers
-      line.trim();
-
-      // if the the line is empty,
-      // this is end of headers
-      // break the while and feed the
-      // remaining `client` to the
-      // Update.writeStream();
-      if (!line.length()) {
-        //headers ended
-        break; // and get the OTA started
-      }
-
-      // Check if the HTTP Response is 200
-      // else break and Exit Update
-      if (line.startsWith("HTTP/1.1 ")) {
-        httpResponseCode = line.substring(9).toInt();
-        if (httpResponseCode != 200) {
-          Serial.println("Got a non 200 status code from server: " + 
-            String(httpResponseCode) + ". Exiting OTA Update.");
-          retval = -1;
-          break;
-        }
-      }
-
-      // extract headers here
-      // Start with content length
-      if (line.startsWith("Content-Length: ")) {
-        contentLength = atol((getHeaderValue(line, 
-          "Content-Length: ")).c_str());
-      }
-
-      // Next, the content type
-      if (line.startsWith("Content-Type: ")) {
-        String contentType = getHeaderValue(line, "Content-Type: ");
-        if ((isJson) && (contentType == "application/json")) {
-          isValidContentType = true;
-        } else if ((isJson == false) && (contentType == 
-            "application/octet-stream")) {
-          isValidContentType = true;
-        } else {
-          Serial.println("Got invalid content type: " + contentType);
-        }
-      }
-    }
-  } else {
-    // Connect to S3 failed
-    // May be try?
-    // Probably a choppy network?
-    Serial.println("Connection to " + String(_hostname) + 
-      " failed. Please check your setup");
-    retval = -1;
-    // retry??
-    // execOTA();
+  pos = filename.lastIndexOf('.');
+  if ((pos > 0) && (filename.substring(pos).compareTo(".json") == 0)) {
+    isJson = true;
   }
 
-  // Check what is the contentLength and if content type is `application/octet-stream`
+  http.begin(filename);
 
-  // check contentLength and content type
-  if (contentLength && isValidContentType) {
-    if (isJson) {
-      while (client.available()) {
+  // Connect to server
+  ret = http.GET();
+  if (ret > 0) {
+    // Connection Succeed.
+    // Fecthing the bin
+    if (ret == HTTP_CODE_OK) {
+      if (isJson) {
         const int     capacity = JSON_OBJECT_SIZE(4) + 110;
         StaticJsonDocument<capacity> _jsonDoc;
         DeserializationError err;
 
-        line = client.readString();
+        line = http.getString();
         err = deserializeJson(_jsonDoc, line);
         if (err) {
           Serial.print(F("JSON deserialization failed: "));
@@ -269,11 +170,11 @@ int DESPatch::getFile(String filename)
             retval = -1;
           }
 
-          // url is optional
-          if (_jsonDoc["url"] != nullptr) {
-            _url = String((const char *) _jsonDoc["url"]);
+          // release notes url is optional
+          if (_jsonDoc["release notes"] != nullptr) {
+            _releaseNotes = String((const char *) _jsonDoc["release notes"]);
           } else {
-            _url = String("");
+            _releaseNotes = String("");
           }
 
           if ((_remoteVersion != "") && (_localVersion != _remoteVersion)) {
@@ -283,53 +184,56 @@ int DESPatch::getFile(String filename)
             updateAvailable = false;
           }
         }
-      }
-    } else {
-      // Check if there is enough to OTA Update
-      bool canBegin = Update.begin(contentLength);
-  
-      // If yes, begin
-      if (canBegin) {
-        Serial.println("Begin OTA. This may take 2 - 5 mins to complete. "
-          "Things might be quiet for a while.. Patience!");
-        // No activity would appear on the Serial monitor
-        // So be patient. This may take 2 - 5mins to complete
-        size_t written = Update.writeStream(client);
-  
-        if (written == contentLength) {
-          Serial.println("Written : " + String(written) + " successfully");
-        } else {
-          Serial.println("Written only : " + String(written) + "/" + 
-            String(contentLength) + ". Retry?" );
-          // retry??
-          // execOTA();
-        }
-  
-        if (Update.end()) {
-          Serial.println("OTA done!");
-          if (Update.isFinished()) {
-            dESPatchPrefs.begin("dESPatch", false);
-            dESPatchPrefs.putString("version", _remoteVersion);
-            dESPatchPrefs.end();
-            Serial.println("Update successfully completed. Rebooting.");
-            ESP.restart();
+      } else {
+        // Check if there is enough to OTA Update
+        contentLength = http.getSize();
+        bool canBegin = Update.begin(contentLength);
+    
+        // If yes, begin
+        if (canBegin) {
+          Serial.println("Begin OTA. This may take 2 - 5 mins to complete. "
+            "Things might be quiet for a while.. Patience!");
+          // No activity would appear on the Serial monitor
+          // So be patient. This may take 2 - 5mins to complete
+          size_t written = Update.writeStream(http.getStream());
+    
+          if (written == contentLength) {
+            Serial.println("Written : " + String(written) + " successfully");
           } else {
-            Serial.println("Update not finished? Something went wrong!");
+            Serial.println("Written only : " + String(written) + "/" + 
+              String(contentLength) + ". Retry?" );
+            // retry??
+            // execOTA();
+          }
+    
+          if (Update.end()) {
+            Serial.println("OTA done!");
+            if (Update.isFinished()) {
+              dESPatchPrefs.begin("dESPatch", false);
+              dESPatchPrefs.putString("version", _remoteVersion);
+              dESPatchPrefs.end();
+              Serial.println("Update successfully completed. Rebooting.");
+              ESP.restart();
+            } else {
+              Serial.println("Update not finished? Something went wrong!");
+              retval = -2;
+            }
+          } else {
+            Serial.println("Error Occurred. Error #: " + 
+              String(Update.getError()));
             retval = -2;
           }
         } else {
-          Serial.println("Error Occurred. Error #: " + 
-            String(Update.getError()));
+          // not enough space to begin OTA
+          // Understand the partitions and
+          // space availability
+          Serial.println("Not enough space to begin OTA");
+          // calling client.flush(); here crashes the ESP32?
           retval = -2;
         }
-      } else {
-        // not enough space to begin OTA
-        // Understand the partitions and
-        // space availability
-        Serial.println("Not enough space to begin OTA");
-        // calling client.flush(); here crashes the ESP32?
-        retval = -2;
       }
+    } else {
+      retval = -1;
     }
   } else {
     // calling client.flush(); here crashes the ESP32?
@@ -364,11 +268,11 @@ int DESPatch::checkForUpdate(bool autoInstall)
     now = millis();
     _runState = DESPatchRunStateChecking;
     if (_appendMac) {
-      retval = getFile(_jsonNameWithMac);
+      retval = getFile(_jsonUrlWithMac);
       if (retval >= 0) {
-        pos = _jsonNameWithMac.lastIndexOf('/');
+        pos = _jsonUrlWithMac.lastIndexOf('/');
         if (pos >= 0) {
-          _binNameFullPath = _jsonNameWithMac.substring(0, pos) + "/" + _binName;
+          _binNameFullPath = _jsonUrlWithMac.substring(0, pos) + "/" + _binName;
         }
       } else {
         _binNameFullPath = "";
@@ -376,11 +280,11 @@ int DESPatch::checkForUpdate(bool autoInstall)
     }
     if ((retval < 0) || (!_appendMac)) {
       // try again without mac
-      retval = getFile(_jsonName);
+      retval = getFile(_jsonUrl);
       if (retval >= 0) {
-        pos = _jsonName.lastIndexOf('/');
+        pos = _jsonUrl.lastIndexOf('/');
         if (pos >= 0) {
-          _binNameFullPath = _jsonName.substring(0, pos) + "/" + _binName;
+          _binNameFullPath = _jsonUrl.substring(0, pos) + "/" + _binName;
         }
       } else {
         _binNameFullPath = "";
@@ -414,10 +318,10 @@ unsigned long DESPatch::getInterval(void)
   return interval;
 }
 
-String * DESPatch::getUrl(String * s)
+String * DESPatch::getReleaseNotes(String * s)
 {
   if (myMutexTake(_busyMutex, portMAX_DELAY) == pdPASS) {
-    *s = _url;
+    *s = _releaseNotes;
     myMutexGive(_busyMutex);
   } else {
     *s = "";
@@ -504,9 +408,8 @@ DESPatchRunState DESPatch::getRunState(void)
   return _runState;
 }
 
-int DESPatch::configure(String hostname, int port, String filename, 
-    bool appendMac, unsigned long interval, bool autoInstall, 
-    DESPatchCallback callback, void * userdata)
+int DESPatch::configure(String url, bool appendMac, unsigned long interval, 
+    bool autoInstall, DESPatchCallback callback, void * userdata)
 {
   DESPatchTaskArg dESPatchTaskArg;
   int pos;
@@ -528,19 +431,16 @@ int DESPatch::configure(String hostname, int port, String filename,
   dESPatchPrefs.end();
   _remoteVersion = "";
   updateAvailable = false;
-  _url = "";
+  _releaseNotes = "";
   _logLevel = 0;
 
-  _hostname = hostname;
-  _port = port;
-
-  pos = filename.lastIndexOf('.');
-  if ((pos <= 0) || (filename.substring(pos).compareTo(".json") != 0)) {
+  pos = url.lastIndexOf('.');
+  if ((pos <= 0) || (url.substring(pos).compareTo(".json") != 0)) {
     return -EINVAL;
   }
-  _jsonName = "/" + filename;
-  _jsonNameWithMac = "/" + filename.substring(0, pos) + "_" + getMac() + 
-    filename.substring(pos);
+  _jsonUrl = url;
+  _jsonUrlWithMac = url.substring(0, pos) + "_" + getMac() + 
+    url.substring(pos);
 
   _appendMac = appendMac;
   _interval = interval;

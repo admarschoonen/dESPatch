@@ -29,7 +29,7 @@ void setup() {
   //keep LED on
   digitalWrite(LED_BUILTIN, LED_ON_VALUE_DEFAULT);
 
-  updateResult = dESPatch.configure("example.com", 80, "path/to/esp32_update.ino.esp32.json", true, 10, true, NULL, NULL);
+  updateResult = dESPatch.configure("http://example.com/path/to/esp32_update.ino.esp32.json", true, 10, true, NULL, NULL);
   Serial.print("dESPatch.configure() returned with code ");
   Serial.println(updateResult);
 }
