@@ -21,8 +21,7 @@ In your setup function add
 ```cpp
 dESPatch.configure("http://example.com/path/to/esp32_update.ino.esp32.json", true, 0, false, NULL, NULL);
 ```
-Replace `example.com` with the hostname where you have stored the firmware and change `80` in case the server runs ons a different port.
-Replace `path/to/esp32_update.ino.esp32.json` with the JSON file that contains the description of the firmware.
+Replace the url with the location where you stored the JSON file that contains the description of the firmware.
 
 ### Main loop
 In your main loop, repeatedly call
