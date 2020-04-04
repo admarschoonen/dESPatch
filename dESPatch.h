@@ -17,6 +17,7 @@
 #else
 #include <WiFi.h>
 #endif
+#include <HTTPClient.h>
 
 #if defined(ESP8266)
 extern "C" {
@@ -69,6 +70,8 @@ class DESPatch
   private:
     /* functions */
     String            getHeaderValue(String header, String headerName);
+    int               parseJson(String line);
+    int               doUpdate(HTTPClient & http);
     int               getFile(String filename);
     String            getMac(void);
     int               installUpdateNoMutex(void);

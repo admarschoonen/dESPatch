@@ -9,7 +9,6 @@
 #include "dESPatch.h"
 #include <Update.h>
 #include <Preferences.h>
-#include <HTTPClient.h>
 
 #define DESPATCH_TASK_PRIORITY tskIDLE_PRIORITY /* higher means higher priority; 0 is lowest (idle task) */
 #define DESPATCH_STACK_SIZE 8192 /* stack size in bytes */
@@ -111,6 +110,107 @@ String DESPatch::getMac(void)
   return mac;
 }
 
+int DESPatch::parseJson(String line)
+{
+  const int capacity = JSON_OBJECT_SIZE(4) + 110;
+  StaticJsonDocument<capacity> _jsonDoc;
+  DeserializationError err;
+  int retval = 0;
+
+  err = deserializeJson(_jsonDoc, line);
+  if (err) {
+    Serial.print(F("JSON deserialization failed: "));
+    Serial.println(err.c_str());
+    retval = -1;
+  } else {
+    // default to _interval in case updateInterval does not exist
+    _interval = _jsonDoc["updateInterval"] | _interval;
+
+    if (_jsonDoc["version"] != nullptr) {
+      _remoteVersion = String((const char *) _jsonDoc["version"]);
+    } else {
+      retval = -1;
+    }
+
+    if (_jsonDoc["filename"] != nullptr) {
+      _binName = String((const char *) _jsonDoc["filename"]);
+    } else {
+      retval = -1;
+    }
+
+    // release notes url is optional
+    if (_jsonDoc["release notes"] != nullptr) {
+      _releaseNotes = String((const char *) _jsonDoc["release notes"]);
+    } else {
+      _releaseNotes = String("");
+    }
+
+    if ((_remoteVersion != "") && (_localVersion != _remoteVersion)) {
+      updateAvailable = true;
+      retval = 1;
+    } else {
+      updateAvailable = false;
+    }
+  }
+
+  return retval;
+}
+
+int DESPatch::doUpdate(HTTPClient & http)
+{
+  long contentLength = 0;
+  int retval = 0;
+
+  // Check if there is enough space to perform update
+  contentLength = http.getSize();
+  bool canBegin = Update.begin(contentLength);
+    
+  // If yes, begin
+  if (canBegin) {
+    Serial.println("Begin OTA. This may take 2 - 5 mins to complete. "
+      "Things might be quiet for a while.. Patience!");
+    // No activity would appear on the Serial monitor
+    // So be patient. This may take 2 - 5mins to complete
+    size_t written = Update.writeStream(http.getStream());
+    
+    if (written == contentLength) {
+      Serial.println("Written : " + String(written) + " successfully");
+    } else {
+      Serial.println("Written only : " + String(written) + "/" + 
+        String(contentLength) + ". Retry?" );
+      // retry??
+      // execOTA();
+    }
+    
+    if (Update.end()) {
+      Serial.println("OTA done!");
+      if (Update.isFinished()) {
+        dESPatchPrefs.begin("dESPatch", false);
+        dESPatchPrefs.putString("version", _remoteVersion);
+        dESPatchPrefs.end();
+        Serial.println("Update successfully completed. Rebooting.");
+        ESP.restart();
+      } else {
+        Serial.println("Update not finished? Something went wrong!");
+        retval = -2;
+      }
+    } else {
+      Serial.println("Error Occurred. Error #: " + 
+        String(Update.getError()));
+      retval = -2;
+    }
+  } else {
+    // not enough space to begin OTA
+    // Understand the partitions and
+    // space availability
+    Serial.println("Not enough space to begin OTA");
+    Update.abort();
+    retval = -2;
+  }
+
+  return retval;
+}
+
 int DESPatch::getFile(String filename)
 {
   // return codes:
@@ -123,7 +223,6 @@ int DESPatch::getFile(String filename)
 
   int retval = 0;
   int pos = -1;
-  long contentLength = 0;
   bool isJson = false;
   String fname;
   String line;
@@ -144,93 +243,10 @@ int DESPatch::getFile(String filename)
     // Fecthing the bin
     if (ret == HTTP_CODE_OK) {
       if (isJson) {
-        const int     capacity = JSON_OBJECT_SIZE(4) + 110;
-        StaticJsonDocument<capacity> _jsonDoc;
-        DeserializationError err;
-
         line = http.getString();
-        err = deserializeJson(_jsonDoc, line);
-        if (err) {
-          Serial.print(F("JSON deserialization failed: "));
-          Serial.println(err.c_str());
-          retval = -1;
-        } else {
-          // default to _interval in case updateInterval does not exist
-          _interval = _jsonDoc["updateInterval"] | _interval;
-
-          if (_jsonDoc["version"] != nullptr) {
-            _remoteVersion = String((const char *) _jsonDoc["version"]);
-          } else {
-            retval = -1;
-          }
-
-          if (_jsonDoc["filename"] != nullptr) {
-            _binName = String((const char *) _jsonDoc["filename"]);
-          } else {
-            retval = -1;
-          }
-
-          // release notes url is optional
-          if (_jsonDoc["release notes"] != nullptr) {
-            _releaseNotes = String((const char *) _jsonDoc["release notes"]);
-          } else {
-            _releaseNotes = String("");
-          }
-
-          if ((_remoteVersion != "") && (_localVersion != _remoteVersion)) {
-            updateAvailable = true;
-            retval = 1;
-          } else {
-            updateAvailable = false;
-          }
-        }
+        retval = parseJson(line);
       } else {
-        // Check if there is enough to OTA Update
-        contentLength = http.getSize();
-        bool canBegin = Update.begin(contentLength);
-    
-        // If yes, begin
-        if (canBegin) {
-          Serial.println("Begin OTA. This may take 2 - 5 mins to complete. "
-            "Things might be quiet for a while.. Patience!");
-          // No activity would appear on the Serial monitor
-          // So be patient. This may take 2 - 5mins to complete
-          size_t written = Update.writeStream(http.getStream());
-    
-          if (written == contentLength) {
-            Serial.println("Written : " + String(written) + " successfully");
-          } else {
-            Serial.println("Written only : " + String(written) + "/" + 
-              String(contentLength) + ". Retry?" );
-            // retry??
-            // execOTA();
-          }
-    
-          if (Update.end()) {
-            Serial.println("OTA done!");
-            if (Update.isFinished()) {
-              dESPatchPrefs.begin("dESPatch", false);
-              dESPatchPrefs.putString("version", _remoteVersion);
-              dESPatchPrefs.end();
-              Serial.println("Update successfully completed. Rebooting.");
-              ESP.restart();
-            } else {
-              Serial.println("Update not finished? Something went wrong!");
-              retval = -2;
-            }
-          } else {
-            Serial.println("Error Occurred. Error #: " + 
-              String(Update.getError()));
-            retval = -2;
-          }
-        } else {
-          // not enough space to begin OTA
-          // Understand the partitions and
-          // space availability
-          Serial.println("Not enough space to begin OTA");
-          // calling client.flush(); here crashes the ESP32?
-          retval = -2;
-        }
+        retval = doUpdate(http);
       }
     } else {
       retval = -1;
