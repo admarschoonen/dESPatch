@@ -221,39 +221,60 @@ int DESPatch::getFile(String filename)
   //
   // Note that if installation of new firmware was successful, this function performs a reset and in that case it does not return
 
-  int retval = 0;
+  int retval = -1;
   int pos = -1;
+  int ret;
   bool isJson = false;
   String fname;
   String line;
+  String url = "";
   HTTPClient http;
-  int ret;
+  uint8_t counter = 0;
+  const uint8_t counterMax = 10;
+  const char *headers[] = {"location"};
+  size_t numHeaders = sizeof(headers)/sizeof(char *);
 
-  pos = filename.lastIndexOf('.');
-  if ((pos > 0) && (filename.substring(pos).compareTo(".json") == 0)) {
-    isJson = true;
-  }
+  url = filename;
 
-  http.begin(filename);
-
-  // Connect to server
-  ret = http.GET();
-  if (ret > 0) {
-    // Connection Succeed.
-    // Fecthing the bin
-    if (ret == HTTP_CODE_OK) {
-      if (isJson) {
-        line = http.getString();
-        retval = parseJson(line);
-      } else {
-        retval = doUpdate(http);
-      }
-    } else {
-      retval = -1;
+  do {
+    pos = filename.lastIndexOf('.');
+    if ((pos > 0) && (filename.substring(pos).compareTo(".json") == 0)) {
+      isJson = true;
     }
-  } else {
-    // calling client.flush(); here crashes the ESP32?
-  }
+
+    // Connect to server
+    http.begin(url);
+    http.collectHeaders(headers, numHeaders);
+
+    ret = http.GET();
+    if (ret > 0) {
+      // Connection Succeed.
+      // Fetching the bin
+      if (ret == HTTP_CODE_OK) {
+        if (isJson) {
+          line = http.getString();
+          retval = parseJson(line);
+          break;
+        } else {
+          retval = doUpdate(http);
+          break;
+        }
+      } else if ((ret >= HTTP_CODE_MULTIPLE_CHOICES) && 
+          (ret < HTTP_CODE_BAD_REQUEST)) {
+        // HTTP redirect
+        url = http.header(0U);
+        if (url == "") {
+          retval = -1;
+          break;
+        }
+      } else {
+        retval = -1;
+        break;
+      }
+    }
+    counter = counter + 1;
+  } while (counter < counterMax);
+
   return retval;
 }
 
