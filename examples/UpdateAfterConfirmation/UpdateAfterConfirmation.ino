@@ -40,8 +40,6 @@ void loop(void) {
   static bool ledOn = false;
   unsigned long t_now = millis();
   const int buttonPin = 0;
-  String localVersion = "";
-  String remoteVersion = "";
 
   if (t_now - t_prev >= 500) {
     t_prev = t_now;
@@ -52,9 +50,9 @@ void loop(void) {
     if (dESPatch.updateAvailable) {
       Serial.println(F("Update available"));
       Serial.print(F("Local version:  "));
-      Serial.println(*dESPatch.getLocalVersion(&localVersion));
+      Serial.println(dESPatch.getLocalVersion());
       Serial.print(F("Remote version: "));
-      Serial.println(*dESPatch.getRemoteVersion(&remoteVersion));
+      Serial.println(dESPatch.getRemoteVersion());
       Serial.println("Press button to install the update");
       if (digitalRead(buttonPin) == LOW) {
         dESPatch.installUpdate();

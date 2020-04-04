@@ -58,9 +58,9 @@ class DESPatch
                         DESPatchCallback callback, void * userdata);
     int               installUpdate(void);
     unsigned long     getInterval(void);
-    String *          getLocalVersion(String * s);
-    String *          getRemoteVersion(String * s);
-    String *          getReleaseNotes(String * s);
+    String            getLocalVersion(void);
+    String            getRemoteVersion(void);
+    String            getReleaseNotes(void);
     bool              updateAvailable;
     void              setLogLevel(uint8_t logLevel);
     void              setRunState(DESPatchRunState state);

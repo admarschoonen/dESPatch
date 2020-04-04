@@ -355,37 +355,37 @@ unsigned long DESPatch::getInterval(void)
   return interval;
 }
 
-String * DESPatch::getReleaseNotes(String * s)
+String DESPatch::getReleaseNotes(void)
 {
+  String s = "";
+
   if (myMutexTake(_busyMutex, portMAX_DELAY) == pdPASS) {
-    *s = _releaseNotes;
+    s = _releaseNotes;
     myMutexGive(_busyMutex);
-  } else {
-    *s = "";
   }
 
   return s;
 }
 
-String * DESPatch::getLocalVersion(String * s)
+String DESPatch::getLocalVersion(void)
 {
+  String s = "";
+
   if (myMutexTake(_busyMutex, portMAX_DELAY) == pdPASS) {
-    *s = _localVersion;
+    s = _localVersion;
     myMutexGive(_busyMutex);
-  } else {
-    *s = "";
   }
 
   return s;
 }
 
-String * DESPatch::getRemoteVersion(String * s)
+String DESPatch::getRemoteVersion(void)
 {
+  String s = "";
+
   if (myMutexTake(_busyMutex, portMAX_DELAY) == pdPASS) {
-    *s = _remoteVersion;
+    s = _remoteVersion;
     myMutexGive(_busyMutex);
-  } else {
-    *s = "";
   }
 
   return s;
