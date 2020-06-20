@@ -9,6 +9,7 @@
 #include "dESPatch.h"
 #include <Update.h>
 #include <Preferences.h>
+#include <esp_task_wdt.h>
 
 #define DESPATCH_TASK_PRIORITY tskIDLE_PRIORITY /* higher means higher priority; 0 is lowest (idle task) */
 #define DESPATCH_STACK_SIZE 8192 /* stack size in bytes */
@@ -167,6 +168,11 @@ int DESPatch::doUpdate(HTTPClient & http)
     
   // If yes, begin
   if (canBegin) {
+    // Set watchdog to 10 minutes since Update.writeStream() does not yield and
+    // thus the idle task may not reset watchdog in time. Usually update is
+    // finished in 2 - 5 minutes.
+    esp_task_wdt_init(600, false);
+
     Serial.println("Begin OTA. This may take 2 - 5 mins to complete. "
       "Things might be quiet for a while.. Patience!");
     // No activity would appear on the Serial monitor
@@ -243,7 +249,11 @@ int DESPatch::getFile(String filename)
     }
 
     // Connect to server
-    http.begin(url);
+    if (_root_ca == NULL) {
+      http.begin(url);
+    } else {
+      http.begin(url, _root_ca);
+    }
     http.collectHeaders(headers, numHeaders);
 
     ret = http.GET();
@@ -445,8 +455,23 @@ DESPatchRunState DESPatch::getRunState(void)
   return _runState;
 }
 
-int DESPatch::configure(String url, bool appendMac, unsigned long interval, 
-    bool autoInstall, DESPatchCallback callback, void * userdata)
+int DESPatch::configure(String url, bool appendMac, 
+    unsigned long interval, bool autoInstall)
+{
+  return configure(url, appendMac, interval, autoInstall, NULL, 
+    NULL, NULL);
+}
+
+int DESPatch::configure(String url, bool appendMac, 
+    unsigned long interval, bool autoInstall, const char * root_ca)
+{
+  return configure(url, appendMac, interval, autoInstall, root_ca, 
+    NULL, NULL);
+}
+
+int DESPatch::configure(String url, bool appendMac, 
+    unsigned long interval, bool autoInstall, const char * root_ca,
+    DESPatchCallback callback, void * userdata)
 {
   DESPatchTaskArg dESPatchTaskArg;
   int pos;
@@ -471,17 +496,26 @@ int DESPatch::configure(String url, bool appendMac, unsigned long interval,
   _releaseNotes = "";
   _logLevel = 0;
 
-  pos = url.lastIndexOf('.');
-  if ((pos <= 0) || (url.substring(pos).compareTo(".json") != 0)) {
+  if ((url.startsWith("http://") == false) && 
+      (url.startsWith("https://") == false)) {
+    Serial.println(F("Error! url must begin with http:// or https://"));
+    return -EDOM;
+  }
+
+  _jsonUrl = url;
+
+  pos = _jsonUrl.lastIndexOf('.');
+  if ((pos <= 0) || (_jsonUrl.substring(pos).compareTo(".json") != 0)) {
     return -EINVAL;
   }
-  _jsonUrl = url;
+
   _jsonUrlWithMac = url.substring(0, pos) + "_" + getMac() + 
     url.substring(pos);
 
   _appendMac = appendMac;
   _interval = interval;
   _autoInstall = autoInstall;
+  _root_ca = root_ca;
   _callback = callback;
   _userdata = userdata;
 

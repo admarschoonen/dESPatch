@@ -54,8 +54,14 @@ class DESPatch
     /* functions */
     void              dESPatch();
     int               configure(String url, bool appendMac, 
+                        unsigned long interval, bool autoInstall);
+    int               configure(String url, bool appendMac, 
                         unsigned long interval, bool autoInstall, 
-                        DESPatchCallback callback, void * userdata);
+                        const char * root_ca);
+    int               configure(String url, bool appendMac, 
+                        unsigned long interval, bool autoInstall, 
+                        const char * root_ca, DESPatchCallback callback, 
+                        void * userdata);
     int               installUpdate(void);
     unsigned long     getInterval(void);
     String            getLocalVersion(void);
@@ -93,6 +99,7 @@ class DESPatch
     unsigned long     _lastTimeChecked;
     uint8_t           _logLevel;
     DESPatchRunState  _runState;
+    const char *      _root_ca;
 };
 
 #endif
