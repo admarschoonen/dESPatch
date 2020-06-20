@@ -10,6 +10,7 @@
 #include <Update.h>
 #include <Preferences.h>
 #include <esp_task_wdt.h>
+#include <base64.h>
 
 #define DESPATCH_TASK_PRIORITY tskIDLE_PRIORITY /* higher means higher priority; 0 is lowest (idle task) */
 #define DESPATCH_STACK_SIZE 8192 /* stack size in bytes */
@@ -230,7 +231,7 @@ int DESPatch::getFile(String filename)
   int retval = -1;
   int pos = -1;
   int ret;
-  bool isJson = false;
+  bool isBin = false;
   String fname;
   String line;
   String url = "";
@@ -242,10 +243,12 @@ int DESPatch::getFile(String filename)
 
   url = filename;
 
+  Serial.print("Retrieving file ");
+  Serial.println(filename);
   do {
     pos = filename.lastIndexOf('.');
-    if ((pos > 0) && (filename.substring(pos).compareTo(".json") == 0)) {
-      isJson = true;
+    if ((pos > 0) && (filename.substring(pos).compareTo(".bin") == 0)) {
+      isBin = true;
     }
 
     // Connect to server
@@ -261,12 +264,12 @@ int DESPatch::getFile(String filename)
       // Connection Succeed.
       // Fetching the bin
       if (ret == HTTP_CODE_OK) {
-        if (isJson) {
-          line = http.getString();
-          retval = parseJson(line);
+        if (isBin) {
+          retval = doUpdate(http);
           break;
         } else {
-          retval = doUpdate(http);
+          line = http.getString();
+          retval = parseJson(line);
           break;
         }
       } else if ((ret >= HTTP_CODE_MULTIPLE_CHOICES) && 
@@ -502,15 +505,22 @@ int DESPatch::configure(String url, bool appendMac,
     return -EDOM;
   }
 
-  _jsonUrl = url;
 
-  pos = _jsonUrl.lastIndexOf('.');
-  if ((pos <= 0) || (_jsonUrl.substring(pos).compareTo(".json") != 0)) {
+  pos = url.lastIndexOf('.');
+  if ((pos <= 0) || (url.substring(pos).compareTo(".json") != 0)) {
     return -EINVAL;
   }
 
+  _jsonUrl = url + "?mac=" + getMac() + "&version=" + 
+    base64::encode(_localVersion);
   _jsonUrlWithMac = url.substring(0, pos) + "_" + getMac() + 
-    url.substring(pos);
+    url.substring(pos) + "?mac=" + getMac() + "&version=" + 
+    base64::encode(_localVersion);
+
+  Serial.print("_jsonUrl: ");
+  Serial.println(_jsonUrl);
+  Serial.print("_jsonUrlWithMac: ");
+  Serial.println(_jsonUrlWithMac);
 
   _appendMac = appendMac;
   _interval = interval;
