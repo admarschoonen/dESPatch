@@ -80,7 +80,6 @@ int myMutexGiveFunc(const char * f, SemaphoreHandle_t x)
 #define myMutexCreateMutex() xSemaphoreCreateMutex()
 
 static Preferences dESPatchPrefs;
-static WiFiClient client;
 
 String DESPatch::getHeaderValue(String header, String headerName)
 {
@@ -235,16 +234,20 @@ int DESPatch::getFile(String filename)
   String fname;
   String line;
   String url = "";
+  WiFiClientSecure *client = new WiFiClientSecure;
   HTTPClient http;
   uint8_t counter = 0;
   const uint8_t counterMax = 10;
   const char *headers[] = {"location"};
   size_t numHeaders = sizeof(headers)/sizeof(char *);
 
+  if (!client) {
+    return -1;
+  }
+
+
   url = filename;
 
-  Serial.print("Retrieving file ");
-  Serial.println(filename);
   do {
     pos = filename.lastIndexOf('.');
     if ((pos > 0) && (filename.substring(pos).compareTo(".bin") == 0)) {
@@ -252,10 +255,11 @@ int DESPatch::getFile(String filename)
     }
 
     // Connect to server
-    if (_root_ca == NULL) {
-      http.begin(url);
-    } else {
-      http.begin(url, _root_ca);
+    if (_root_ca != NULL) {
+      client->setCACert(_root_ca);
+    }
+    if (http.begin(*client, url) == 0) {
+      return -1;
     }
     http.collectHeaders(headers, numHeaders);
 
