@@ -521,11 +521,6 @@ int DESPatch::configure(String url, bool appendMac,
     url.substring(pos) + "?mac=" + getMac() + "&version=" + 
     base64::encode(_localVersion);
 
-  Serial.print("_jsonUrl: ");
-  Serial.println(_jsonUrl);
-  Serial.print("_jsonUrlWithMac: ");
-  Serial.println(_jsonUrlWithMac);
-
   _appendMac = appendMac;
   _interval = interval;
   _autoInstall = autoInstall;
