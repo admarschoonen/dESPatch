@@ -538,6 +538,7 @@ int DESPatch::configure(String url, bool appendMac,
     //priority = uxTaskPriorityGet(NULL);
     dESPatchTaskArg.autoInstall = _autoInstall;
     dESPatchTaskArg.dESPatch = this;
+    Serial.println("Creating dESPatchTask");
     xTaskCreate(dESPatchTask, "dESPatchTask", DESPATCH_STACK_SIZE, &dESPatchTaskArg, priority, NULL);
   } else {
     // background task is disabled
