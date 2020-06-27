@@ -54,11 +54,14 @@ class DESPatch
     /* functions */
     void              dESPatch();
     int               configure(String url, bool appendMac, 
+                        bool useBackgroundTask,
                         unsigned long interval, bool autoInstall);
     int               configure(String url, bool appendMac, 
+                        bool useBackgroundTask,
                         unsigned long interval, bool autoInstall, 
                         const char * root_ca);
     int               configure(String url, bool appendMac, 
+                        bool useBackgroundTask,
                         unsigned long interval, bool autoInstall, 
                         const char * root_ca, DESPatchCallback callback, 
                         void * userdata);
@@ -70,8 +73,16 @@ class DESPatch
     bool              updateAvailable;
     void              setLogLevel(uint8_t logLevel);
     void              setRunState(DESPatchRunState state);
+
+    /*
+     * _checkForUpdate() should ideally be a private function but then it
+     * cannot be accessed from within dESPatchTask. Do not use
+     * _checkForUpdate() in your own sketch; use checkForUpdate() instead
+     */
+    int               _checkForUpdate(bool autoInstall);
     DESPatchRunState  getRunState(void);
     int               checkForUpdate(bool autoInstall);
+    unsigned long     getLastTimeChecked(void);
 
   private:
     /* functions */

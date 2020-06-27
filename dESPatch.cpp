@@ -312,7 +312,7 @@ int DESPatch::installUpdate(void)
   return retval;
 }
 
-int DESPatch::checkForUpdate(bool autoInstall)
+int DESPatch::_checkForUpdate(bool autoInstall)
 {
   unsigned long now;
   int retval = 0;
@@ -372,6 +372,18 @@ unsigned long DESPatch::getInterval(void)
   return interval;
 }
 
+unsigned long DESPatch::getLastTimeChecked(void)
+{
+  unsigned long lastTimeChecked = 0;
+
+  if (myMutexTake(_busyMutex, portMAX_DELAY) == pdPASS) {
+    lastTimeChecked = _lastTimeChecked;
+    myMutexGive(_busyMutex);
+  }
+
+  return lastTimeChecked;
+}
+
 String DESPatch::getReleaseNotes(void)
 {
   String s = "";
@@ -416,6 +428,22 @@ void DESPatch::setLogLevel(uint8_t logLevel)
   }
 }
 
+int DESPatch::checkForUpdate(bool autoInstall)
+{
+  unsigned long now, interval, lastTimeChecked;
+  int retval = 0;
+
+  interval = getInterval() * 1000;
+  lastTimeChecked = getLastTimeChecked();
+  now = millis();
+
+  if ((interval > 0) && (now > lastTimeChecked + interval)) {
+    retval = _checkForUpdate(autoInstall);
+  }
+
+  return retval;
+}
+
 void dESPatchTask(void * DESPatchTaskArgP)
 {
   unsigned long start, stop, interval, delay;
@@ -427,7 +455,7 @@ void dESPatchTask(void * DESPatchTaskArgP)
     start = millis();
 
     if (interval > 0) {
-      dESPatchP->checkForUpdate(autoInstall);
+      dESPatchP->_checkForUpdate(autoInstall);
     }
 
     interval = dESPatchP->getInterval() * 1000;
@@ -462,21 +490,21 @@ DESPatchRunState DESPatch::getRunState(void)
   return _runState;
 }
 
-int DESPatch::configure(String url, bool appendMac, 
+int DESPatch::configure(String url, bool appendMac, bool useBackgroundTask,
     unsigned long interval, bool autoInstall)
 {
-  return configure(url, appendMac, interval, autoInstall, NULL, 
-    NULL, NULL);
+  return configure(url, appendMac, useBackgroundTask, interval, autoInstall,
+    NULL, NULL, NULL);
 }
 
-int DESPatch::configure(String url, bool appendMac, 
+int DESPatch::configure(String url, bool appendMac, bool useBackgroundTask,
     unsigned long interval, bool autoInstall, const char * root_ca)
 {
-  return configure(url, appendMac, interval, autoInstall, root_ca, 
-    NULL, NULL);
+  return configure(url, appendMac, useBackgroundTask, interval, autoInstall,
+    root_ca, NULL, NULL);
 }
 
-int DESPatch::configure(String url, bool appendMac, 
+int DESPatch::configure(String url, bool appendMac, bool useBackgroundTask, 
     unsigned long interval, bool autoInstall, const char * root_ca,
     DESPatchCallback callback, void * userdata)
 {
@@ -528,11 +556,11 @@ int DESPatch::configure(String url, bool appendMac,
   _callback = callback;
   _userdata = userdata;
 
-  if (_interval > 0) {
-    // Set _lastTimeChecked to now - _interval to ensure update() will 
-    // immediately check for updates the first time it is called
-    _lastTimeChecked = millis() - _interval * 1000;
+  // Set _lastTimeChecked to now - _interval to ensure update() will 
+  // immediately check for updates the first time it is called
+  _lastTimeChecked = millis() - _interval * 1000;
 
+  if (useBackgroundTask) {
     // Create the background task that will check and install updates
     priority = DESPATCH_TASK_PRIORITY;
     //priority = uxTaskPriorityGet(NULL);
@@ -540,9 +568,6 @@ int DESPatch::configure(String url, bool appendMac,
     dESPatchTaskArg.dESPatch = this;
     Serial.println("Creating dESPatchTask");
     xTaskCreate(dESPatchTask, "dESPatchTask", DESPATCH_STACK_SIZE, &dESPatchTaskArg, priority, NULL);
-  } else {
-    // background task is disabled
-    _lastTimeChecked = 0;
   }
    
   return 0;
