@@ -346,8 +346,6 @@ int DESPatch::_checkForUpdate(bool autoInstall)
     }
     if ((retval == 1) && autoInstall) {
       _runState = DESPatchRunStateInstalling;
-      Serial.println(String(__func__) + "(): need to do SW update with binname: "
-        + _binNameFullPath);
       retval = installUpdateNoMutex();
     }
 
