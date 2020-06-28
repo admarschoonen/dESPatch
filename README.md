@@ -56,7 +56,7 @@ if (dESPatch.updateAvailable) {
 ```
 
 ### Export binary
-In Arduino export the binary with `Sketch` -> `Export compiled binary`. Copy the binary to the server from where the ESP should download it.
+In Arduino export the binary with `Sketch` -> `Export compiled binary`. Upload the binary to the server from where the ESP should download it.
 
 ### Upload this code to your ESP
 Upload this sketch to your ESP with `Sketch` -> `Upload Using Programmer` to upload the firmware to your ESP. It will now periodically check and install updates.
