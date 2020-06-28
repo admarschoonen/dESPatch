@@ -63,7 +63,7 @@ Upload this sketch to your ESP with `Sketch` -> `Upload Using Programmer` to upl
 
 That's it! Your ESP should now automatically update itself when you create a new binary and change the version number in the JSON file. All you need to do to install new firmware in future is to export the binary, upload it to the server and change the version number in the JSON file. The ESP will update itself when it has a wifi connection.
 
-For more advanced usage such as automatic checking in the background or deploying custom firmware to specific devices, see below.
+For more advanced usage such as deploying custom firmware to specific devices, see below.
 
 ## Custom firmware for specific devices
 The 2nd argument of `dESPatch.configure()` function indicates if the ESP should append its MAC address to the JSON filename. If it is set to true, it will check for `path/to/esp32_update.ino.esp32_XXXXXXXXXXXX.json` first, where `XXXXXXXXXXXX` is the MAC address in HEX format. If this file is not found, it will check for `path/to/esp32_update.ino.esp32.json`. This way, you can deploy specific firmware such as beta-versions to select devices first before making it generally available.
