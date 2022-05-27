@@ -245,7 +245,7 @@ int DESPatch::getFile(String filename)
     return -1;
   }
 
-
+  http.setReuse(false);
   url = filename;
 
   do {
