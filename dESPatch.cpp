@@ -270,10 +270,12 @@ int DESPatch::getFile(String filename)
       if (ret == HTTP_CODE_OK) {
         if (isBin) {
           retval = doUpdate(http);
+          http.end();
           break;
         } else {
           line = http.getString();
           retval = parseJson(line);
+          http.end();
           break;
         }
       } else if ((ret >= HTTP_CODE_MULTIPLE_CHOICES) && 
@@ -282,13 +284,16 @@ int DESPatch::getFile(String filename)
         url = http.header(0U);
         if (url == "") {
           retval = -1;
+          http.end();
           break;
         }
       } else {
         retval = -1;
+        http.end();
         break;
       }
     }
+    http.end();
     counter = counter + 1;
   } while (counter < counterMax);
 
