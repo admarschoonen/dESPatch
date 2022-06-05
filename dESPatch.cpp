@@ -259,6 +259,7 @@ int DESPatch::getFile(String filename)
       client->setCACert(_root_ca);
     }
     if (http.begin(*client, url) == 0) {
+      delete client;
       return -1;
     }
     http.collectHeaders(headers, numHeaders);
@@ -297,6 +298,7 @@ int DESPatch::getFile(String filename)
     counter = counter + 1;
   } while (counter < counterMax);
 
+  delete client;
   return retval;
 }
 
