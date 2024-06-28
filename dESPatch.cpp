@@ -11,6 +11,7 @@
 #include <Preferences.h>
 #include <esp_task_wdt.h>
 #include <base64.h>
+#include <WiFiClientSecure.h>
 
 #define DESPATCH_TASK_PRIORITY tskIDLE_PRIORITY /* higher means higher priority; 0 is lowest (idle task) */
 #define DESPATCH_STACK_SIZE 8192 /* stack size in bytes */
@@ -171,7 +172,13 @@ int DESPatch::doUpdate(HTTPClient & http)
     // Set watchdog to 10 minutes since Update.writeStream() does not yield and
     // thus the idle task may not reset watchdog in time. Usually update is
     // finished in 2 - 5 minutes.
-    esp_task_wdt_init(600, false);
+    const esp_task_wdt_config_t config = {
+        .timeout_ms = 10U * 60U * 1000U,
+        .idle_core_mask=3,
+        .trigger_panic=false,
+    };
+
+    esp_task_wdt_init(&config);
 
     Serial.println("Begin OTA. This may take 2 - 5 mins to complete. "
       "Things might be quiet for a while.. Patience!");
