@@ -169,16 +169,24 @@ int DESPatch::doUpdate(HTTPClient & http)
     
   // If yes, begin
   if (canBegin) {
-    // Set watchdog to 10 minutes since Update.writeStream() does not yield and
+    // Set watchdog to 15 minutes since Update.writeStream() does not yield and
     // thus the idle task may not reset watchdog in time. Usually update is
     // finished in 2 - 5 minutes.
+    constexpr uint32_t timeout_seconds = 15U * 60U;
+
+#ifdef esp_task_wdt_config_t
+    // ESP-IDF v5.0 and newer
     const esp_task_wdt_config_t config = {
-        .timeout_ms = 10U * 60U * 1000U,
+        .timeout_ms = timeout_seconds * 1000U,
         .idle_core_mask=3,
         .trigger_panic=false,
     };
 
     esp_task_wdt_init(&config);
+#else
+    // ESP-IDF v4.4 and older
+    esp_task_wdt_init(timeout_seconds, false);
+#endif
 
     Serial.println("Begin OTA. This may take 2 - 5 mins to complete. "
       "Things might be quiet for a while.. Patience!");
