@@ -114,8 +114,7 @@ String DESPatch::getMac(void)
 
 int DESPatch::parseJson(String line)
 {
-  const int capacity = JSON_OBJECT_SIZE(4) + 110;
-  StaticJsonDocument<capacity> _jsonDoc;
+  JsonDocument _jsonDoc;
   DeserializationError err;
   int retval = 0;
 
